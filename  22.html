@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Media dei voti</title>
+<style>
+:root{
+  --bg:#f3f5f2;--surface:#fff;--ink:#1c2a24;--muted:#66756d;--line:#d8dfda;--accent:#1f6b4f;--accent-ink:#fff;--bad:#a63a2b;
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121916;--surface:#1b2520;--ink:#e6eee9;--muted:#93a39a;--line:#2d3a33;--accent:#5fc197;--accent-ink:#0d1a14;--bad:#e58b7d}}
+:root[data-theme="dark"]{--bg:#121916;--surface:#1b2520;--ink:#e6eee9;--muted:#93a39a;--line:#2d3a33;--accent:#5fc197;--accent-ink:#0d1a14;--bad:#e58b7d}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Iowan Old Style","Palatino Linotype",Georgia,serif;line-height:1.4}
+main{max-width:480px;margin:0 auto;padding:20px 16px 40px}
+h1{font-size:1.5rem;margin:0 0 16px;font-weight:600}
+.result{background:var(--accent);color:var(--accent-ink);border-radius:14px;padding:20px;margin-bottom:12px}
+.result .num{font-size:3.6rem;line-height:1;font-weight:600;font-variant-numeric:tabular-nums}
+.result .sub{margin-top:8px;font-size:.95rem;opacity:.9}
+.mode{display:flex;gap:8px;align-items:center;font-size:.9rem;color:var(--muted);margin-bottom:16px}
+select{font:inherit;font-size:.9rem;padding:6px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
+.top{display:flex;gap:8px;align-items:center;margin-bottom:10px}
+.name{flex:1;font-weight:600}
+.savg{min-width:52px;text-align:right;font-size:1.3rem;font-weight:600;color:var(--accent);font-variant-numeric:tabular-nums}
+.grades{display:flex;flex-wrap:wrap;gap:8px}
+input{font:inherit;font-size:1rem;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);min-width:0}
+.g{width:64px;text-align:center}
+input:focus-visible,button:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button{font:inherit;cursor:pointer;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+.plus{width:64px;padding:10px;border:1px dashed var(--accent);color:var(--accent);background:transparent;font-weight:600}
+.del{width:40px;height:40px;color:var(--bad)}
+.add{width:100%;padding:13px;background:transparent;border:1px dashed var(--accent);color:var(--accent);font-weight:600}
+.clear{margin-top:20px;padding:8px 12px;font-size:.9rem;color:var(--muted)}
+.bk{margin-top:24px;padding-top:16px;border-top:1px solid var(--line)}.bk h2{font-size:1.05rem;margin:0 0 4px}.bk p{margin:0 0 10px;color:var(--muted);font-size:.9rem}.bk .btns{display:flex;gap:8px}.bk .btns button{flex:1;padding:12px;font-weight:600}.bk textarea{display:none;width:100%;margin-top:10px;min-height:110px;font:inherit;font-size:.85rem;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink)}.bk .ok{display:none;width:100%;margin-top:8px;padding:12px;background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}#bkMsg{margin-top:8px;font-size:.9rem;color:var(--muted)}
+</style>
+</head>
+<body>
+<main>
+  <h1>Media dei voti</h1>
+  <div class="result" aria-live="polite">
+    <div class="num" id="avg">–</div>
+    <div class="sub" id="sub">Inserisci almeno un voto</div>
+  </div>
+  <div class="mode">
+    <label for="mode">Media generale:</label>
+    <select id="mode">
+      <option value="subj">media delle materie</option>
+      <option value="all">tutti i voti insieme</option>
+    </select>
+  </div>
+  <div id="list"></div>
+  <button class="add" id="addSubj" type="button">Aggiungi materia</button>
+  <div class="bk">
+    <h2>Backup</h2>
+    <p>Copia il backup e incollalo in Note o mandalo a te stesso. Per recuperare i voti, tocca Ripristina e incolla il testo.</p>
+    <div class="btns"><button type="button" id="bkCopy">Copia backup</button><button type="button" id="bkRest">Ripristina</button></div>
+    <textarea id="bkText" aria-label="Testo del backup"></textarea>
+    <button type="button" class="ok" id="bkOk">Ripristina da questo testo</button>
+    <div id="bkMsg" aria-live="polite"></div>
+  </div>
+  <button class="clear" id="clear" type="button">Cancella tutto</button>
+</main>
+<script>
+(function(){
+  var KEY='media-voti-v2',list=document.getElementById('list'),modeEl=document.getElementById('mode');
+  function blank(){return {n:'',g:['']};}
+  function load(){
+    try{var s=localStorage.getItem(KEY);if(s){var d=JSON.parse(s);if(d&&Array.isArray(d.s)&&d.s.length)return d;}}catch(e){}
+    return {m:'subj',s:[blank(),blank()]};
+  }
+  var data=load();
+  function save(){try{localStorage.setItem(KEY,JSON.stringify(data));}catch(e){}}
+  function num(x){var n=parseFloat(String(x).replace(',','.'));return isNaN(n)?null:n;}
+  function fmt(n){return n.toFixed(2).replace('.',',');}
+  function vals(sub){return sub.g.map(num).filter(function(v){return v!==null;});}
+  function mean(a){return a.reduce(function(x,y){return x+y;},0)/a.length;}
+
+  function render(focus){
+    list.innerHTML='';
+    data.s.forEach(function(sub,i){
+      var card=document.createElement('div');card.className='card';
+      card.innerHTML='<div class="top"><input class="name" type="text" placeholder="Materia" aria-label="Materia"><div class="savg">–</div><button type="button" class="del" aria-label="Elimina materia">✕</button></div><div class="grades"></div>';
+      var name=card.querySelector('.name'),box=card.querySelector('.grades');
+      name.value=sub.n;
+      name.oninput=function(){sub.n=this.value;save();};
+      card.querySelector('.del').onclick=function(){data.s.splice(i,1);if(!data.s.length)data.s.push(blank());save();render();};
+      sub.g.forEach(function(g,j){
+        var inp=document.createElement('input');
+        inp.className='g';inp.type='text';inp.inputMode='decimal';inp.placeholder='7';inp.value=g;inp.setAttribute('aria-label','Voto '+(j+1));
+        inp.oninput=function(){sub.g[j]=this.value;save();calc();};
+        inp.onchange=function(){
+          if(this.value.trim()===''&&sub.g.length>1){sub.g.splice(j,1);save();render();}
+        };
+        box.appendChild(inp);
+        if(focus&&focus[0]===i&&focus[1]===j)setTimeout(function(){inp.focus();},0);
+      });
+      var plus=document.createElement('button');
+      plus.type='button';plus.className='plus';plus.textContent='+ voto';
+      plus.onclick=function(){sub.g.push('');save();render([i,sub.g.length-1]);};
+      box.appendChild(plus);
+      card._avg=card.querySelector('.savg');
+      list.appendChild(card);
+    });
+    calc();
+  }
+
+  function calc(){
+    var cards=list.children,subAvgs=[],all=[];
+    data.s.forEach(function(sub,i){
+      var v=vals(sub),el=cards[i]&&cards[i]._avg;
+      if(v.length){var m=mean(v);subAvgs.push(m);all=all.concat(v);if(el)el.textContent=fmt(m);}
+      else if(el)el.textContent='–';
+    });
+    var avg=document.getElementById('avg'),sub=document.getElementById('sub');
+    if(!all.length){avg.textContent='–';sub.textContent='Inserisci almeno un voto';return;}
+    avg.textContent=fmt(data.m==='all'?mean(all):mean(subAvgs));
+    sub.textContent=subAvgs.length+(subAvgs.length===1?' materia':' materie')+' · '+all.length+(all.length===1?' voto':' voti');
+  }
+
+  modeEl.value=data.m||'subj';
+  modeEl.onchange=function(){data.m=this.value;save();calc();};
+  document.getElementById('addSubj').onclick=function(){data.s.push(blank());save();render([data.s.length-1,0]);};
+  document.getElementById('clear').onclick=function(){data={m:data.m,s:[blank(),blank()]};save();render();};
+  var bkText=document.getElementById('bkText'),bkOk=document.getElementById('bkOk'),bkMsg=document.getElementById('bkMsg');
+  document.getElementById('bkCopy').onclick=function(){
+    var t=JSON.stringify(data);
+    bkText.style.display='block';bkOk.style.display='none';bkText.value=t;bkText.focus();bkText.select();
+    var done=function(){bkMsg.textContent='Backup copiato. Incollalo in Note o mandalo a te stesso.';};
+    var fail=function(){bkMsg.textContent='Tieni premuto sul testo, scegli Seleziona tutto e poi Copia.';};
+    try{if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).then(done,fail);}else{fail();}}catch(e){fail();}
+  };
+  document.getElementById('bkRest').onclick=function(){
+    bkText.style.display='block';bkOk.style.display='block';bkText.value='';bkText.placeholder='Incolla qui il backup';bkText.focus();bkMsg.textContent='';
+  };
+  bkOk.onclick=function(){
+    try{
+      var d=JSON.parse(bkText.value.trim());
+      if(!d||!Array.isArray(d.s)||!d.s.length)throw 0;
+      d.s=d.s.map(function(s){return {n:String((s&&s.n)||''),g:(Array.isArray(s&&s.g)&&s.g.length)?s.g.map(String):['']};});
+      d.m=d.m==='all'?'all':'subj';
+      data=d;save();modeEl.value=data.m;render();
+      bkText.style.display='none';bkOk.style.display='none';bkMsg.textContent='Voti ripristinati.';
+    }catch(e){bkMsg.textContent='Testo non valido. Controlla di aver incollato tutto il backup.';}
+  };
+  render();
+})();
+</script>
+</body>
+</html>
